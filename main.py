@@ -1,41 +1,69 @@
 from agents import Agent
 from organization import Organization
+from game import FifteenGame
 
-CEO = Agent(
-    name="CEO",
-    role="Chief Executive Officer",
+ANALYST = Agent(
+    name="Ana",
+    role="Strategy Analyst",
     personality=(
-        "You are extremely demanding and unlenient. You challenge every proposal, "
-        "demand measurable outcomes with specific numbers, and hold the team strictly "
-        "accountable. You push hard for results and reject vague plans."
+        "Methodical and pattern-focused. You look for mathematical structure, "
+        "map out what numbers the opponent might need, and like to think "
+        "several moves ahead before committing."
     ),
 )
 
-MARKETER = Agent(
-    name="Alex",
-    role="Marketing Director",
+INTUITION = Agent(
+    name="Kai",
+    role="Intuitive Player",
     personality=(
-        "You are creative, enthusiastic, and lenient. You encourage bold experiments, "
-        "celebrate ideas before judging them, and believe in building relationships "
-        "before selling. You prefer shipping fast over over-planning."
+        "Fast and instinctive. You trust momentum and gut feel. You notice "
+        "which numbers feel powerful and like to disrupt the opponent's "
+        "plans before they materialize."
     ),
 )
 
-SUPPLIER = Agent(
-    name="Sam",
-    role="Supply Chain Director",
+CRITIC = Agent(
+    name="Max",
+    role="Devil's Advocate",
     personality=(
-        "You are pragmatic and detail-oriented. You translate ambitious plans into "
-        "operational reality, flag risks early, and ensure commitments are achievable. "
-        "You are the bridge between vision and execution."
+        "Skeptical of whatever the team just proposed. You challenge "
+        "assumptions, point out what could go wrong, and push everyone "
+        "to think one move further before deciding."
     ),
 )
 
-sales_org = Organization(
-    name="SalesForce Alpha",
-    agents=[CEO, MARKETER, SUPPLIER],
-    goal="Launch a new AI productivity tool and reach $1M in revenue within 90 days.",
+team = Organization(
+    name="The Strategists",
+    agents=[ANALYST, INTUITION, CRITIC],
+    goal=(
+        "Master the game of Fifteen. Through repeated play and reflection, "
+        "develop a reliable winning strategy and encode it as doctrine."
+    ),
 )
 
 if __name__ == "__main__":
-    sales_org.run(rounds=3)
+    try:
+        games = int(input("How many games to play? "))
+    except ValueError:
+        games = 3
+
+    results = []
+
+    for i in range(1, games + 1):
+        print(f"\n{'*'*50}")
+        print(f"  Game {i} of {games}")
+        if team.doctrine.entries:
+            print(f"  Doctrine so far: {len(team.doctrine.entries)} entries")
+        print(f"{'*'*50}")
+
+        outcome = team.play_game(FifteenGame())
+        results.append(outcome)
+
+    wins = results.count("org_wins")
+    losses = results.count("bot_wins")
+    draws = results.count("draw")
+
+    print(f"\n{'='*50}")
+    print(f"  Final record: {wins}W / {losses}L / {draws}D")
+    print(f"  Doctrine accumulated: {len(team.doctrine.entries)} entries")
+    print(f"{'='*50}")

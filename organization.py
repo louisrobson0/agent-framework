@@ -1,3 +1,4 @@
+import re
 import anthropic
 import json
 
@@ -47,6 +48,86 @@ class Organization:
             print("No new entries extracted.")
 
         print(f"\nDoctrine saved → {self.doctrine.path}")
+
+    def play_game(self, game, verbose: bool = True) -> str:
+        """Play one game session. Agents discuss each move; doctrine updated after."""
+        doctrine_context = self.doctrine.to_context()
+        move_log: list[str] = []
+        full_transcript: list[str] = []
+
+        print(f"\n{game.RULES}\n")
+
+        while game.status() == "ongoing":
+            state = game.display()
+            print(f"\n{state}")
+
+            history = "\n".join(full_transcript) if full_transcript else "(game just started)"
+            prompt = (
+                f"{game.RULES}\n\n"
+                f"Current state:\n{state}\n\n"
+                f"Available numbers: {sorted(game.available)}\n\n"
+                f"Discussion so far:\n{history}\n\n"
+                f"Discuss briefly, then end your message with: PICK: <number>"
+            )
+
+            discussion: list[str] = []
+            for agent in self.agents:
+                context = prompt if not discussion else "\n".join(discussion)
+                response = agent.run(context, doctrine_context, self.goal)
+                line = f"{agent.name}: {response}"
+                discussion.append(line)
+                full_transcript.append(line)
+                if verbose:
+                    print(f"\n[{agent.name}] {response}")
+
+            move = self._parse_move(" ".join(discussion), game.available)
+            game.team_move(move)
+            move_log.append(f"Team→{move}")
+            print(f"\n>>> Team picks: {move}")
+
+            if game.status() != "ongoing":
+                break
+
+            bot = game.bot_move()
+            move_log.append(f"Bot→{bot}")
+            print(f">>> Bot picks:  {bot}")
+
+        outcome = game.status()
+        label = {"org_wins": "WIN ✓", "bot_wins": "LOSS ✗", "draw": "DRAW —"}[outcome]
+        print(f"\n{'='*40}\nResult: {label}\nMoves: {', '.join(move_log)}\n{'='*40}")
+
+        # Post-game debrief
+        debrief = (
+            f"Game over — {label}.\n"
+            f"Move sequence: {', '.join(move_log)}\n\n"
+            f"Discuss: what worked, what failed, what should we do differently next game?"
+        )
+        full_transcript.append(debrief)
+
+        for agent in self.agents:
+            response = agent.run("\n".join(full_transcript), doctrine_context, self.goal)
+            line = f"{agent.name}: {response}"
+            full_transcript.append(line)
+            if verbose:
+                print(f"\n[{agent.name} debrief] {response}")
+
+        new_entries = self._synthesize("\n".join(full_transcript))
+        if new_entries:
+            self.doctrine.add(new_entries)
+            print(f"\n+{len(new_entries)} doctrine entries saved.")
+
+        return outcome
+
+    def _parse_move(self, text: str, available: list[int]) -> int:
+        match = re.search(r"PICK:\s*(\d+)", text, re.IGNORECASE)
+        if match:
+            n = int(match.group(1))
+            if n in available:
+                return n
+        for n in sorted(available, reverse=True):
+            if str(n) in text.split():
+                return n
+        return available[0]
 
     def _synthesize(self, transcript: str) -> list[dict]:
         prompt = f"""You are a Scribe for "{self.name}".
