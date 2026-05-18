@@ -1,0 +1,17 @@
+# API keys / environment
+.env
+*.env
+
+# Runtime doctrine files (generated per-session)
+*_doctrine.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
