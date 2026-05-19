@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Agent Framework</title>
+<style>
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --s2:      #1c2128;
+  --border:  #30363d;
+  --text:    #e6edf3;
+  --muted:   #8b949e;
+  --accent:  #58a6ff;
+  --win:     #3fb950;
+  --loss:    #f85149;
+  --draw:    #d29922;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text);
+  height: 100vh; overflow: hidden;
+}
+
+/* ── screens ── */
+.screen {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  transition: opacity .3s ease, transform .3s ease;
+}
+.screen.hidden { opacity: 0; pointer-events: none; transform: translateY(10px); }
+
+/* ── shared nav bar ── */
+.nav {
+  height: 48px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 16px;
+  flex-shrink: 0;
+}
+.nav-brand { font-size: 13px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.nav-sep   { width: 1px; height: 18px; background: var(--border); }
+.nav-crumb { font-size: 13px; color: var(--muted); }
+.nav-crumb.active { color: var(--text); font-weight: 600; }
+.nav-back {
+  padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: color .15s, border-color .15s;
+}
+.nav-back:hover { color: var(--text); border-color: var(--text); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+
+/* ─────────────────────────────────────────
+   SCREEN 1 — TASK
+───────────────────────────────────────── */
+#s-task { overflow-y: auto; }
+#s-task::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: radial-gradient(circle, #30363d 1px, transparent 1px);
+  background-size: 28px 28px; opacity: .3; pointer-events: none; z-index: 0;
+}
+.task-body {
+  position: relative; z-index: 1;
+  max-width: 860px; margin: 0 auto;
+  padding: 52px 40px 80px;
+  display: flex; flex-direction: column; gap: 36px;
+}
+.task-heading { font-size: 26px; font-weight: 800; letter-spacing: -.4px; }
+.task-sub     { font-size: 14px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+
+.task-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.task-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 22px 20px;
+  cursor: pointer; transition: border-color .2s, box-shadow .2s;
+  position: relative;
+}
+.task-card:hover { border-color: #444c56; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
+.task-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.task-card.selected .task-card-check { opacity: 1; }
+
+.task-card-check {
+  position: absolute; top: 14px; right: 14px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 900; color: #000; opacity: 0;
+  transition: opacity .2s;
+}
+.task-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800; margin-bottom: 14px;
+}
+.task-card-title { font-size: 15px; font-weight: 700; margin-bottom: 5px; }
+.task-card-desc  { font-size: 12px; color: var(--muted); line-height: 1.55; }
+.task-card-tag {
+  display: inline-block; margin-top: 12px;
+  font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 4px;
+}
+
+.custom-section { display: flex; flex-direction: column; gap: 8px; }
+.custom-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+.custom-textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px; font-size: 14px; line-height: 1.6;
+  color: var(--text); font-family: inherit; outline: none; resize: none; height: 110px;
+  transition: border-color .2s;
+}
+.custom-textarea:focus { border-color: var(--accent); }
+.custom-textarea::placeholder { color: #555d69; }
+
+.task-footer { display: flex; align-items: center; justify-content: space-between; }
+.task-hint { font-size: 13px; color: var(--muted); }
+.continue-btn {
+  padding: 12px 28px; border-radius: 10px; border: none;
+  background: var(--accent); color: #000; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: opacity .2s, transform .15s;
+}
+.continue-btn:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+.continue-btn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+
+/* ─────────────────────────────────────────
+   SCREEN 2 — TEAM
+───────────────────────────────────────── */
+.team-layout {
+  display: grid; grid-template-columns: 220px 1fr;
+  flex: 1; overflow: hidden;
+}
+
+/* saved orgs sidebar */
+.saved-sidebar {
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.sidebar-header {
+  padding: 12px 14px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted);
+  border-bottom: 1px solid var(--border); background: var(--surface);
+  flex-shrink: 0;
+}
+.saved-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.saved-empty { padding: 20px 10px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.saved-org-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; transition: border-color .15s, background .15s;
+}
+.saved-org-row:hover { background: var(--s2); border-color: var(--border); }
+.saved-org-row.active { background: rgba(88,166,255,.08); border-color: var(--accent); }
+.saved-org-name  { font-size: 13px; font-weight: 600; flex: 1; }
+.saved-org-count { font-size: 11px; color: var(--muted); }
+.saved-org-del {
+  width: 18px; height: 18px; border-radius: 4px; border: none;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s; flex-shrink: 0;
+}
+.saved-org-del:hover { background: rgba(248,81,73,.15); color: var(--loss); }
+
+/* main builder area */
+.team-main { overflow-y: auto; }
+.team-inner { max-width: 720px; padding: 32px 36px 60px; display: flex; flex-direction: column; gap: 28px; }
+
+.org-meta { display: flex; flex-direction: column; gap: 6px; border-left: 3px solid var(--accent); padding-left: 16px; }
+.org-name-input {
+  font-size: 26px; font-weight: 800; color: var(--text);
+  background: transparent; border: none; outline: none; width: 100%; letter-spacing: -.3px;
+}
+.org-name-input::placeholder { color: #444c56; }
+.org-task-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted); font-weight: 500;
+}
+.org-task-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+.section-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); display: flex; align-items: center; gap: 8px;
+}
+.section-count {
+  font-size: 11px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 1px 8px; color: var(--muted); font-weight: 600; letter-spacing: 0;
+}
+
+.agent-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 11px;
+}
+.agent-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 11px; padding: 14px; position: relative;
+  border-top: 3px solid var(--agent-color, var(--border));
+  transition: box-shadow .2s; animation: fadeUp .2s ease;
+}
+.agent-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.ac-top { display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }
+.ac-av { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; flex-shrink: 0; }
+.ac-name { font-size: 13px; font-weight: 700; }
+.ac-role { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ac-del {
+  position: absolute; top: 9px; right: 9px;
+  width: 20px; height: 20px; border-radius: 5px; border: none;
+  background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s; line-height: 1;
+}
+.ac-del:hover { background: rgba(248,81,73,.15); color: var(--loss); }
+.ac-personality {
+  font-size: 11px; color: #6e7a87; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.add-card {
+  background: transparent; border: 1.5px dashed var(--border);
+  border-radius: 11px; min-height: 120px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 5px; cursor: pointer; transition: border-color .2s, background .2s;
+}
+.add-card:hover { border-color: var(--accent); background: rgba(88,166,255,.04); }
+.add-card-plus  { font-size: 22px; color: var(--muted); }
+.add-card-label { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+.form-card { background: var(--surface); border: 1px solid var(--accent); border-radius: 11px; padding: 13px; display: none; flex-direction: column; gap: 7px; }
+.form-card.open { display: flex; }
+.fc-input, .fc-ta {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 7px; padding: 7px 9px; font-size: 12px; color: var(--text);
+  font-family: inherit; outline: none; transition: border-color .2s;
+}
+.fc-input:focus, .fc-ta:focus { border-color: var(--accent); }
+.fc-input::placeholder, .fc-ta::placeholder { color: #555d69; }
+.fc-ta { resize: none; height: 62px; line-height: 1.45; }
+.fc-row { display: flex; gap: 6px; }
+.fc-add { flex: 1; padding: 7px; border-radius: 6px; border: none; background: var(--accent); color: #000; font-size: 12px; font-weight: 700; cursor: pointer; }
+.fc-add:hover { opacity: .85; }
+.fc-cancel { padding: 7px 11px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+.team-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 8px; border-top: 1px solid var(--border);
+}
+.team-hint { font-size: 13px; color: var(--muted); }
+.team-btns { display: flex; gap: 10px; }
+.save-btn {
+  padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--muted); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: color .2s, border-color .2s;
+}
+.save-btn:hover { color: var(--text); border-color: var(--text); }
+.begin-btn {
+  padding: 10px 26px; border-radius: 9px; border: none;
+  background: var(--accent); color: #000; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: opacity .2s, transform .15s;
+}
+.begin-btn:hover:not(:disabled) { opacity: .88; transform: translateY(-1px); }
+.begin-btn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+
+/* ─────────────────────────────────────────
+   SCREEN 3 — RUN
+───────────────────────────────────────── */
+.run-header {
+  height: 52px; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 14px; flex-shrink: 0;
+}
+.rh-org    { font-size: 14px; font-weight: 700; }
+.rh-task   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.rh-right  { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.avatars   { display: flex; }
+.av-pip {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 900; border: 2px solid var(--bg);
+  margin-left: -6px;
+}
+.av-pip:first-child { margin-left: 0; }
+.record    { display: flex; gap: 12px; font-size: 13px; font-weight: 700; }
+.rec-w { color: var(--win); } .rec-l { color: var(--loss); } .rec-d { color: var(--draw); }
+
+.run-main {
+  display: grid; grid-template-columns: 220px 1fr 260px;
+  flex: 1; overflow: hidden;
+}
+.panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+.panel:last-child { border-right: none; }
+.panel-hd {
+  padding: 9px 15px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--muted);
+  border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+}
+
+/* task/state panel */
+.task-panel-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.task-desc-block {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 9px;
+  padding: 13px; font-size: 13px; line-height: 1.6; color: #cdd9e5;
+}
+.state-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 5px; }
+.state-metric { font-size: 22px; font-weight: 800; }
+.state-sub    { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.metric-row   { display: flex; gap: 14px; flex-wrap: wrap; }
+.metric-card  { background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 11px 13px; flex: 1; min-width: 70px; }
+
+.run-footer { padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.run-info   { font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+.result-banner { text-align: center; padding: 7px; border-radius: 7px; font-weight: 700; font-size: 14px; margin-bottom: 7px; display: none; }
+.result-banner.win  { background: rgba(63,185,80,.15);  color: var(--win);  display: block; }
+.result-banner.loss { background: rgba(248,81,73,.15);  color: var(--loss); display: block; }
+.result-banner.draw { background: rgba(210,153,34,.15); color: var(--draw); display: block; }
+.run-btn {
+  width: 100%; padding: 9px; border-radius: 8px; border: none;
+  background: var(--accent); color: #000; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: opacity .2s;
+}
+.run-btn:hover { opacity: .85; }
+.run-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* conversation */
+.conv-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.msg { display: flex; gap: 9px; animation: fadeUp .22s ease; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+.av { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; flex-shrink: 0; }
+.mb { flex: 1; padding-top: 1px; }
+.mn { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.mr { color: var(--muted); font-weight: 400; }
+.mt { font-size: 13px; line-height: 1.55; color: #cdd9e5; }
+.pick-tag { font-weight: 700; padding: 1px 6px; border-radius: 4px; background: rgba(88,166,255,.18); color: var(--accent); }
+.sys-msg { text-align: center; font-size: 11px; color: var(--muted); padding: 5px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.thinking-wrap { display: flex; gap: 9px; }
+.dots { display: inline-flex; gap: 4px; padding: 7px 0; }
+.dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: bounce 1.1s infinite; }
+.dots span:nth-child(2) { animation-delay: .18s; }
+.dots span:nth-child(3) { animation-delay: .36s; }
+@keyframes bounce { 0%,80%,100%{transform:scale(.75);opacity:.4;} 40%{transform:scale(1);opacity:1;} }
+.placeholder { margin: auto; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.7; padding: 32px; }
+.ph-icon { font-size: 30px; margin-bottom: 10px; }
+
+/* doctrine */
+.doc-feed { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.doc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 11px; animation: fadeUp .4s ease; }
+.doc-text { font-size: 13px; line-height: 1.55; margin-bottom: 6px; }
+.doc-meta { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.doc-author { font-weight: 700; }
+.conf-row { display: flex; gap: 3px; margin-top: 5px; }
+.pip { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: background .4s; }
+.pip.on { background: var(--accent); }
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SCREEN 1 — TASK
+══════════════════════════════════════ -->
+<div id="s-task" class="screen">
+  <nav class="nav">
+    <span class="nav-brand">Agent Framework</span>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb active">1. Task</span>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb">2. Team</span>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb">3. Run</span>
+  </nav>
+  <div class="task-body">
+    <div>
+      <div class="task-heading">What should your team work on?</div>
+      <div class="task-sub">Choose a preset task or describe your own. Agents will deliberate, take actions, and build doctrine across repeated runs.</div>
+    </div>
+
+    <div class="task-cards" id="task-cards">
+      <div class="task-card" data-type="stratum" onclick="selectTask(this)">
+        <div class="task-card-check">✓</div>
+        <div class="task-icon" style="background:rgba(227,179,65,.12);color:#e3b341">ST</div>
+        <div class="task-card-title">Stratum</div>
+        <div class="task-card-desc">Excavate 5 columns with hidden collapse thresholds. Dig aggressively for depth² points, or spend actions to gather information first.</div>
+        <div class="task-card-tag" style="background:rgba(227,179,65,.1);color:#e3b341">Risk vs Reward</div>
+      </div>
+      <div class="task-card" data-type="cartographers" onclick="selectTask(this)">
+        <div class="task-card-check">✓</div>
+        <div class="task-icon" style="background:rgba(86,211,100,.12);color:#56d364">CA</div>
+        <div class="task-card-title">Cartographers</div>
+        <div class="task-card-desc">Draw terrain shapes onto an 11×11 grid across 4 seasons. Maximise score across overlapping objectives that reward placement synergy.</div>
+        <div class="task-card-tag" style="background:rgba(86,211,100,.1);color:#56d364">Spatial Planning</div>
+      </div>
+      <div class="task-card" data-type="custom" onclick="selectTask(this)">
+        <div class="task-card-check">✓</div>
+        <div class="task-icon" style="background:rgba(88,166,255,.12);color:#58a6ff">+ </div>
+        <div class="task-card-title">Custom Task</div>
+        <div class="task-card-desc">Describe any goal or problem. Agents will deliberate in rounds, propose approaches, challenge each other, and develop doctrine.</div>
+        <div class="task-card-tag" style="background:rgba(88,166,255,.1);color:#58a6ff">Open-ended</div>
+      </div>
+    </div>
+
+    <div class="custom-section" id="custom-section" style="display:none">
+      <div class="custom-label">Describe the task or goal</div>
+      <textarea class="custom-textarea" id="custom-text"
+        placeholder="e.g. 'We need to reduce customer churn by 15% this quarter. Analyse which lever to pull first and propose a 30-day action plan.' — or anything else."></textarea>
+    </div>
+
+    <div class="task-footer">
+      <div class="task-hint" id="task-hint">Select a task to continue</div>
+      <button class="continue-btn" id="continue-btn" onclick="goToTeam()" disabled>Continue →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN 2 — TEAM
+══════════════════════════════════════ -->
+<div id="s-team" class="screen hidden">
+  <nav class="nav">
+    <button class="nav-back" onclick="showScreen('s-task')">← Task</button>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb">1. Task</span>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb active">2. Team</span>
+    <div class="nav-sep"></div>
+    <span class="nav-crumb">3. Run</span>
+  </nav>
+  <div class="team-layout">
+
+    <!-- saved orgs sidebar -->
+    <div class="saved-sidebar">
+      <div class="sidebar-header">Saved Organizations</div>
+      <div class="saved-list" id="saved-list">
+        <div class="saved-empty" id="saved-empty">No saved organizations yet.<br>Build one and save it below.</div>
+      </div>
+    </div>
+
+    <!-- builder -->
+    <div class="team-main">
+      <div class="team-inner">
+
+        <div class="org-meta">
+          <input class="org-name-input" id="org-name" placeholder="Organization name" value="The Strategists" />
+          <div class="org-task-badge">
+            <div class="org-task-dot" id="task-dot"></div>
+            <span id="task-badge-label">No task selected</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-label" style="margin-bottom:12px">
+            Agents <span class="section-count" id="agent-count">0</span>
+          </div>
+          <div class="agent-grid" id="agent-grid">
+            <div class="add-card" id="add-card" onclick="openAddForm()">
+              <div class="add-card-plus">+</div>
+              <div class="add-card-label">Add Agent</div>
+            </div>
+            <div class="form-card" id="form-card">
+              <input class="fc-input" id="fc-name" placeholder="Name" maxlength="24"/>
+              <input class="fc-input" id="fc-role" placeholder="Role  (e.g. Risk Analyst)" maxlength="48"/>
+              <textarea class="fc-ta" id="fc-p" placeholder="Personality — how they think, what they prioritise..."></textarea>
+              <div class="fc-row">
+                <button class="fc-add" onclick="submitAgent()">Add Agent</button>
+                <button class="fc-cancel" onclick="closeAddForm()">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="team-actions">
+          <div class="team-hint" id="team-hint">Add at least one agent to begin</div>
+          <div class="team-btns">
+            <button class="save-btn" onclick="saveOrg()">Save Organization</button>
+            <button class="begin-btn" id="begin-btn" onclick="goToRun()" disabled>Begin Run →</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN 3 — RUN
+══════════════════════════════════════ -->
+<div id="s-run" class="screen hidden">
+  <div class="run-header">
+    <button class="nav-back" onclick="goToTeamFromRun()">← Team</button>
+    <div style="margin-left:4px">
+      <div class="rh-org" id="rh-org-name">Organization</div>
+      <div class="rh-task" id="rh-task-name">Task</div>
+    </div>
+    <div class="rh-right">
+      <div class="avatars" id="run-avatars"></div>
+      <div class="record">
+        <span class="rec-w" id="rw">0W</span>
+        <span class="rec-l" id="rl">0L</span>
+        <span class="rec-d" id="rd">0D</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="run-main">
+
+    <!-- Left: Task/State panel -->
+    <div class="panel">
+      <div class="panel-hd" id="state-panel-hd">Task</div>
+      <div class="task-panel-body" id="state-body">
+        <!-- populated on game start -->
+      </div>
+      <div class="run-footer">
+        <div class="run-info" id="run-info">Ready</div>
+        <div class="result-banner" id="result-banner"></div>
+        <button class="run-btn" id="run-btn" onclick="nextRun()">Start Run 1</button>
+      </div>
+    </div>
+
+    <!-- Center: Conversation -->
+    <div class="panel">
+      <div class="panel-hd">Agent Conversation</div>
+      <div class="conv-feed" id="conv">
+        <div class="placeholder" id="conv-ph">
+          <div class="ph-icon">◎</div>
+          Start a run to watch your agents deliberate
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Doctrine -->
+    <div class="panel">
+      <div class="panel-hd">Doctrine — <span id="doc-count">0</span> entries</div>
+      <div class="doc-feed" id="doc-feed">
+        <div class="placeholder">
+          <div class="ph-icon">≡</div>
+          Principles learned from runs appear here
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Palette ───────────────────────────────────────────────────────────────
+const PALETTE = ['#58a6ff','#f78166','#56d364','#e3b341','#bc8cff','#39c5cf','#ff7b72','#a5d6ff'];
+let pidx = 0;
+const nextColor = () => PALETTE[pidx++ % PALETTE.length];
+
+// ── Task config ───────────────────────────────────────────────────────────
+const TASKS = {
+  stratum: {
+    label: 'Stratum',
+    color: '#e3b341',
+    goal:  'Master Stratum. Excavate columns for depth² points without triggering collapses. Target: beat 60 points.',
+    hint:  'Beat 60 points',
+  },
+  cartographers: {
+    label: 'Cartographers',
+    color: '#56d364',
+    goal:  'Master Cartographers. Place terrain shapes to score across seasonal objectives. Target: beat 30 points.',
+    hint:  'Beat 30 points',
+  },
+  custom: {
+    label: 'Custom Task',
+    color: '#58a6ff',
+    goal:  '',
+    hint:  'Open-ended',
+  },
+};
+
+let selectedTaskType = null;
+let agents = [];
+let nextId  = 1;
+let doctrine = [];
+let runNum   = 0;
+let record   = {w:0, l:0, d:0};
+let busy     = false;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// ── Screen nav ────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.toggle('hidden', s.id !== id);
+  });
+}
+
+function selectTask(card) {
+  document.querySelectorAll('.task-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedTaskType = card.dataset.type;
+
+  const isCustom = selectedTaskType === 'custom';
+  document.getElementById('custom-section').style.display = isCustom ? '' : 'none';
+
+  const task = TASKS[selectedTaskType];
+  document.getElementById('task-hint').textContent = isCustom ? 'Describe your task above, then continue' : task.hint;
+  document.getElementById('continue-btn').disabled  = isCustom; // enabled after typing
+  if (!isCustom) document.getElementById('continue-btn').disabled = false;
+
+  if (isCustom) {
+    document.getElementById('custom-text').oninput = () => {
+      document.getElementById('continue-btn').disabled = !document.getElementById('custom-text').value.trim();
+    };
+  }
+}
+
+function goToTeam() {
+  if (!selectedTaskType) return;
+  const task = TASKS[selectedTaskType];
+  const dot   = document.getElementById('task-dot');
+  dot.style.background = task.color;
+  document.getElementById('task-badge-label').textContent = task.label;
+
+  if (selectedTaskType === 'custom') {
+    TASKS.custom.goal = document.getElementById('custom-text').value.trim();
+  }
+  showScreen('s-team');
+  renderSavedList();
+}
+
+function goToRun() {
+  if (!agents.length) return;
+  const orgName = document.getElementById('org-name').value.trim() || 'Organization';
+  const task    = TASKS[selectedTaskType];
+
+  document.getElementById('rh-org-name').textContent = orgName;
+  document.getElementById('rh-task-name').textContent = task.label + (selectedTaskType === 'custom' ? ': ' + task.goal.slice(0, 60) + '…' : '');
+  document.getElementById('run-avatars').innerHTML = agents.map(a =>
+    `<div class="av-pip" style="background:${a.color}22;color:${a.color}">${a.name[0].toUpperCase()}</div>`
+  ).join('');
+
+  initStatePanel();
+  showScreen('s-run');
+}
+
+function goToTeamFromRun() {
+  if (busy) return;
+  showScreen('s-team');
+}
+
+// ── State panel init ──────────────────────────────────────────────────────
+function initStatePanel() {
+  const body = document.getElementById('state-body');
+  const hd   = document.getElementById('state-panel-hd');
+  const task  = TASKS[selectedTaskType];
+
+  if (selectedTaskType === 'custom') {
+    hd.textContent = 'Task';
+    body.innerHTML = `
+      <div class="state-label">Objective</div>
+      <div class="task-desc-block">${esc(task.goal)}</div>
+      <div style="margin-top:8px">
+        <div class="state-label">Progress</div>
+        <div class="metric-card" style="margin-top:6px">
+          <div class="state-metric" id="run-round-num">—</div>
+          <div class="state-sub">rounds completed</div>
+        </div>
+      </div>`;
+  } else if (selectedTaskType === 'stratum') {
+    hd.textContent = 'Excavation State';
+    body.innerHTML = `
+      <div class="state-label">Score target: 60 pts</div>
+      <div class="metric-row">
+        <div class="metric-card"><div class="state-metric" id="st-score">0</div><div class="state-sub">current score</div></div>
+        <div class="metric-card"><div class="state-metric" id="st-turn">0/10</div><div class="state-sub">turn</div></div>
+      </div>
+      <div class="state-label" style="margin-top:4px">Columns</div>
+      <div id="st-columns" style="display:flex;flex-direction:column;gap:5px;margin-top:4px"></div>`;
+    updateStratumDisplay(null);
+  } else {
+    hd.textContent = 'Map State';
+    body.innerHTML = `
+      <div class="state-label">Score target: 30 pts</div>
+      <div class="metric-row">
+        <div class="metric-card"><div class="state-metric" id="ca-score">0</div><div class="state-sub">total score</div></div>
+        <div class="metric-card"><div class="state-metric" id="ca-season">Spring</div><div class="state-sub">season</div></div>
+      </div>
+      <div class="state-label" style="margin-top:4px">Last placement</div>
+      <div class="task-desc-block" id="ca-last" style="margin-top:4px;font-size:12px;color:var(--muted)">—</div>`;
+  }
+}
+
+function updateStratumDisplay(state) {
+  const el = document.getElementById('st-columns');
+  if (!el) return;
+  if (!state) {
+    el.innerHTML = [0,1,2,3,4].map(i =>
+      `<div style="display:flex;align-items:center;gap:8px;font-size:12px">
+        <span style="color:var(--muted);width:14px">${i}</span>
+        <div style="flex:1;height:6px;background:var(--border);border-radius:3px"></div>
+        <span style="color:var(--muted)">d:0</span>
+      </div>`
+    ).join('');
+    return;
+  }
+  el.innerHTML = state.columns.map((col, i) => {
+    const pct = Math.min(100, (col.depth / 7) * 100);
+    const color = col.collapsed ? 'var(--loss)' : col.rumble ? 'var(--draw)' : 'var(--accent)';
+    return `<div style="display:flex;align-items:center;gap:8px;font-size:12px">
+      <span style="color:var(--muted);width:14px">${i}</span>
+      <div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width .4s"></div>
+      </div>
+      <span style="color:${color}">${col.collapsed ? 'X' : 'd:'+col.depth}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('st-score').textContent = state.score;
+  document.getElementById('st-turn').textContent  = state.turn + '/10';
+}
+
+// ── Agents ────────────────────────────────────────────────────────────────
+function addAgent(name, role, personality) {
+  agents.push({ id: nextId++, name, role, personality, color: nextColor() });
+  renderAgentGrid();
+  syncBeginBtn();
+}
+function removeAgent(id) {
+  agents = agents.filter(a => a.id !== id);
+  renderAgentGrid();
+  syncBeginBtn();
+}
+
+function renderAgentGrid() {
+  const grid = document.getElementById('agent-grid');
+  document.getElementById('agent-count').textContent = agents.length;
+  grid.querySelectorAll('.agent-card').forEach(el => el.remove());
+  agents.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'agent-card';
+    card.style.setProperty('--agent-color', a.color);
+    card.innerHTML = `
+      <button class="ac-del" onclick="removeAgent(${a.id})">×</button>
+      <div class="ac-top">
+        <div class="ac-av" style="background:${a.color}22;color:${a.color}">${a.name[0].toUpperCase()}</div>
+        <div><div class="ac-name" style="color:${a.color}">${esc(a.name)}</div><div class="ac-role">${esc(a.role)}</div></div>
+      </div>
+      <div class="ac-personality" title="${esc(a.personality)}">${esc(a.personality)}</div>`;
+    grid.insertBefore(card, document.getElementById('add-card'));
+  });
+}
+
+function syncBeginBtn() {
+  const has = agents.length > 0;
+  document.getElementById('begin-btn').disabled = !has;
+  document.getElementById('team-hint').textContent = has
+    ? `${agents.length} agent${agents.length>1?'s':''} ready`
+    : 'Add at least one agent to begin';
+}
+
+function openAddForm() {
+  document.getElementById('add-card').style.display = 'none';
+  document.getElementById('form-card').classList.add('open');
+  document.getElementById('fc-name').focus();
+}
+function closeAddForm() {
+  document.getElementById('form-card').classList.remove('open');
+  document.getElementById('add-card').style.display = '';
+  ['fc-name','fc-role','fc-p'].forEach(id => { document.getElementById(id).value = ''; document.getElementById(id).style.borderColor = ''; });
+}
+function submitAgent() {
+  const name = document.getElementById('fc-name').value.trim();
+  const role = document.getElementById('fc-role').value.trim();
+  const p    = document.getElementById('fc-p').value.trim();
+  let ok = true;
+  [['fc-name',name],['fc-role',role],['fc-p',p]].forEach(([id,v]) => {
+    document.getElementById(id).style.borderColor = v ? '' : '#f85149';
+    if (!v) ok = false;
+  });
+  if (!ok) return;
+  addAgent(name, role, p);
+  closeAddForm();
+}
+
+// ── Saved orgs (localStorage) ─────────────────────────────────────────────
+function getSaved() { try { return JSON.parse(localStorage.getItem('af_orgs')||'[]'); } catch { return []; } }
+function setSaved(orgs) { localStorage.setItem('af_orgs', JSON.stringify(orgs)); }
+
+function saveOrg() {
+  const name = document.getElementById('org-name').value.trim() || 'Organization';
+  if (!agents.length) { alert('Add at least one agent first.'); return; }
+  const saved = getSaved();
+  const idx = saved.findIndex(o => o.name === name);
+  const org = { name, agents: agents.map(({name,role,personality}) => ({name,role,personality})) };
+  if (idx >= 0) saved[idx] = org; else saved.push(org);
+  setSaved(saved);
+  renderSavedList();
+}
+
+function loadOrg(name) {
+  const org = getSaved().find(o => o.name === name);
+  if (!org) return;
+  agents = [];
+  pidx = 0;
+  nextId = 1;
+  org.agents.forEach(a => addAgent(a.name, a.role, a.personality));
+  document.getElementById('org-name').value = org.name;
+  renderSavedList(name);
+}
+
+function deleteOrg(name) {
+  const saved = getSaved().filter(o => o.name !== name);
+  setSaved(saved);
+  renderSavedList();
+}
+
+function renderSavedList(activeName) {
+  const list  = document.getElementById('saved-list');
+  const empty = document.getElementById('saved-empty');
+  const orgs  = getSaved();
+  list.querySelectorAll('.saved-org-row').forEach(el => el.remove());
+  if (!orgs.length) { if (empty) empty.style.display = ''; return; }
+  if (empty) empty.style.display = 'none';
+  orgs.forEach(org => {
+    const row = document.createElement('div');
+    row.className = 'saved-org-row' + (org.name === activeName ? ' active' : '');
+    row.innerHTML = `
+      <div class="saved-org-name">${esc(org.name)}</div>
+      <div class="saved-org-count">${org.agents.length}</div>
+      <button class="saved-org-del" onclick="event.stopPropagation();deleteOrg('${esc(org.name)}')">×</button>`;
+    row.addEventListener('click', () => loadOrg(org.name));
+    list.appendChild(row);
+  });
+}
+
+// ── Response gen ──────────────────────────────────────────────────────────
+function detectStyle(p) {
+  p = p.toLowerCase();
+  if (/methodical|analyt|pattern|systemat|careful|math|logical|calcul|data|evidence/.test(p)) return 'analytical';
+  if (/instinct|intuiti|fast|bold|momentum|gut|quick|aggressive|feel|bias.to.action/.test(p))  return 'intuitive';
+  if (/skeptic|devil|challeng|question|push.?back|critic|doubt|contrast|wrong|risk|downside/.test(p)) return 'skeptical';
+  return 'generic';
+}
+
+const RESPONSES = {
+  stratum: {
+    analytical: [
+      (t,s) => `Column ${t.best_col} has the best expected depth. DIG it at intensity ${t.intensity}. Expected value is ${(t.intensity**2).toFixed(0)} points if it holds. <span class="pick-tag">DIG ${t.best_col} ×${t.intensity}</span>`,
+      (t,s) => `With ${s} points so far, we need to average ${((60-s)/Math.max(1,t.turns_left)).toFixed(1)} pts/turn. DIG aggressively. <span class="pick-tag">DIG ${t.best_col} ×${t.intensity}</span>`,
+    ],
+    intuitive: [
+      (t,s) => `Column ${t.best_col}. Trust the read. <span class="pick-tag">DIG ${t.best_col} ×${t.intensity}</span>`,
+      (t,s) => `Go deep on ${t.best_col} — momentum is there. <span class="pick-tag">DIG ${t.best_col} ×${t.intensity}</span>`,
+    ],
+    skeptical: [
+      (t,s) => `Column ${t.best_col} is obvious — but are we sure it won't collapse? Spend a BRACE first. <span class="pick-tag">BRACE ${t.best_col}</span>`,
+      (t,s) => `What if column ${t.best_col} is near threshold? I'd SHORE before committing. <span class="pick-tag">SHORE ${t.best_col}</span>`,
+    ],
+    generic: [
+      (t,s) => `I'd go with column ${t.best_col}. <span class="pick-tag">DIG ${t.best_col} ×${t.intensity}</span>`,
+    ],
+  },
+  cartographers: {
+    analytical: [
+      (t,s) => `Place ${t.terrain} at (${t.row},${t.col}). It scores for ${t.objective} this season and sets up adjacent synergy. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+      (t,s) => `Orientation ${t.ori} maximises coverage near the ${t.region}. Place there. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+    ],
+    intuitive: [
+      (t,s) => `(${t.row},${t.col}), orientation ${t.ori}. Feels right. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+      (t,s) => `Put the ${t.terrain} at (${t.row},${t.col}). Clear move. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+    ],
+    skeptical: [
+      (t,s) => `(${t.row},${t.col}) works for now but blocks future water adjacency. Worth it? Yes — commit. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+      (t,s) => `Are we sure (${t.row},${t.col}) doesn't hurt winter scoring? Checked — it doesn't. <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+    ],
+    generic: [
+      (t,s) => `I'd place at (${t.row},${t.col}). <span class="pick-tag">PLACE ${t.row} ${t.col}</span>`,
+    ],
+  },
+  custom: {
+    analytical: [
+      (t,s) => `Based on the objective, the highest-leverage approach is ${t.approach}. Expected impact is measurable within ${t.horizon}. I recommend we start there.`,
+      (t,s) => `Three options: ${t.approach}, alternative A, or alternative B. On expected value, ${t.approach} dominates. Proceed.`,
+    ],
+    intuitive: [
+      (t,s) => `${t.approach}. This is the move. Let's not overthink it.`,
+      (t,s) => `Go with ${t.approach} — the team can course-correct if it doesn't land.`,
+    ],
+    skeptical: [
+      (t,s) => `${t.approach} sounds good but what's the failure mode? If it doesn't work in ${t.horizon}, we've lost time with no fallback.`,
+      (t,s) => `I'll push back: have we actually validated the assumption behind ${t.approach}? Because if that assumption is wrong, everything downstream fails.`,
+    ],
+    generic: [
+      (t,s) => `I think ${t.approach} is the right starting point.`,
+    ],
+  },
+};
+
+const CUSTOM_APPROACHES = [
+  'focusing on the highest-impact constraint first',
+  'running a small-scale experiment before committing resources',
+  'mapping the stakeholder landscape and aligning on success metrics',
+  'auditing current state before proposing changes',
+  'breaking the problem into a two-week sprint',
+  'identifying quick wins to build momentum while designing the long-term solution',
+];
+const CUSTOM_HORIZONS = ['2 weeks', '1 month', '6 weeks', 'the next sprint'];
+
+function agentSay(agent, gameType, turnData, score) {
+  const style  = detectStyle(agent.personality);
+  const pool   = (RESPONSES[gameType]?.[style] || RESPONSES[gameType]?.generic || RESPONSES.custom.generic);
+  const fn     = pool[Math.floor(Math.random() * pool.length)];
+  return fn(turnData, score);
+}
+
+function makeStratumTurn(runState) {
+  const alive = runState.columns.filter(c => !c.collapsed);
+  const col   = alive.length ? alive[Math.floor(Math.random() * alive.length)].id : 0;
+  return { best_col: col, intensity: [1,2,3][Math.floor(Math.random()*3)], turns_left: 10 - runState.turn };
+}
+function makeCartographersTurn(round) {
+  const terrains = ['Forest','Farm','Water','Village'];
+  const regions  = ['left cluster','mountain edge','top row','centre'];
+  return {
+    terrain: terrains[Math.floor(Math.random()*terrains.length)],
+    row: Math.floor(Math.random()*9)+1, col: Math.floor(Math.random()*9)+1,
+    ori: Math.floor(Math.random()*4),
+    objective: ['A (Sentinel Wood)','B (Canal Lake)','C (Greenbough)','D (Mages Valley)'][Math.floor(Math.random()*4)],
+    region: regions[Math.floor(Math.random()*regions.length)],
+  };
+}
+function makeCustomTurn() {
+  return {
+    approach: CUSTOM_APPROACHES[Math.floor(Math.random()*CUSTOM_APPROACHES.length)],
+    horizon:  CUSTOM_HORIZONS[Math.floor(Math.random()*CUSTOM_HORIZONS.length)],
+  };
+}
+
+// ── Debrief lines ─────────────────────────────────────────────────────────
+function agentDebrief(agent, result, score) {
+  const style = detectStyle(agent.personality);
+  const pools = {
+    analytical: {
+      win:  [`Score ${score} — above target. The risk-calibrated approach validated.`, `${score} pts. Correct execution. Let's codify the opening heuristic.`],
+      loss: [`Score ${score} — below target. Too conservative early; should have dug deeper in turns 1-3.`, `${score} pts. Missed target. Information gathering cost too many turns.`],
+      draw: [`${score} pts — borderline. Marginal decisions in mid-game need a clearer rule.`, `${score}. Need doctrine for the ambiguous mid-game state.`],
+    },
+    intuitive: {
+      win:  [`${score}! Aggressive play paid off.`, `Yes. Push hard early — the doctrine holds.`],
+      loss: [`${score}. Should have committed faster in the opening.`, `Missed it. We played not to lose instead of playing to win.`],
+      draw: [`${score}. Borderline. We need to go bolder.`, `So close. Next run: less hedging.`],
+    },
+    skeptical: {
+      win:  [`${score} — good, but the mid-run near-collapse was lucky. We need a rule for that.`, `Result: ${score}. I flagged that risk — we got away with it this time.`],
+      loss: [`${score}. This is exactly what I warned about. Document it.`, `${score} — the assumption failed. Update the doctrine to reflect it.`],
+      draw: [`${score}. Doctrine gap exposed. We had no rule for the edge case.`, `${score}. The disputed turn cost us. Need a tiebreaker principle.`],
+    },
+    generic: {
+      win:  [`${score} — good run. Let's keep what worked.`, `Nice result. Deliberation helped.`],
+      loss: [`${score}. Need to adjust.`, `${score} — room to improve.`],
+      draw: [`${score}. Close. A few better decisions and we'd have it.`, `${score}. Decent. Doctrine will help next time.`],
+    },
+  };
+  const r    = result === 'win' ? 'win' : result === 'loss' ? 'loss' : 'draw';
+  const pool = pools[style][r];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ── Doctrine ──────────────────────────────────────────────────────────────
+const DOCTRINE_BY_TASK = {
+  stratum: [
+    "BRACE a column before committing to DIG intensity >1 — one wasted turn is better than losing all accumulated depth.",
+    "Open turns 1-3 with DIG intensity 1 across multiple columns to spread information risk.",
+    "When a column RUMBLES, SHORE it rather than abandoning it — depth already invested is worth protecting.",
+    "Never DIG a column that has rumbled without a SHORE first unless it's the final turn.",
+    "Favour columns at depth 3+ for final turns — the depth² curve makes late digs disproportionately valuable.",
+    "Save at least 1 BRACE token for the second half of the game when collapse risk is highest.",
+    "If 3 or more columns are uncollapsed at turn 7, go aggressive — the squared scoring rewards commitment.",
+    "SHORE costs a turn but is almost always right when depth ≥ threshold-2.",
+  ],
+  cartographers: [
+    "Prioritise Forest placement in edge columns early — Sentinel Wood scores twice (Spring and Winter).",
+    "Water adjacent to Farm scores for Canal Lake every season — set up this adjacency in Spring and maintain it.",
+    "Place near mountain cells (1,9), (5,5), (9,1) with Water terrain when Mages Valley is active.",
+    "A row with one Forest cell scores Greenbough — a single-cell Forest card can score an entire row.",
+    "Avoid filling the centre in Spring — it blocks the Mages Valley adjacency options for later seasons.",
+    "Coin cards are worth playing even suboptimally — each coin is +1 final point.",
+    "Plan terrain adjacency two placements ahead — a shape that looks weak now may unlock a future combo.",
+    "Wasteland is a last resort but sometimes correct to block a region from future bad placements.",
+  ],
+  custom: [
+    "IF the problem is ambiguous THEN define success metrics before proposing solutions BECAUSE misaligned metrics cause drift.",
+    "IF multiple approaches are viable THEN run a cheap experiment first BECAUSE assumptions often fail at scale.",
+    "IF the skeptic raises a failure mode THEN address it explicitly before committing BECAUSE ignored risks compound.",
+    "IF the team converges quickly THEN the skeptic should play devil's advocate regardless BECAUSE easy consensus misses edge cases.",
+    "IF momentum is lost mid-task THEN re-anchor to the original objective BECAUSE scope creep is the most common failure mode.",
+  ],
+};
+
+function addDoctrineEntries(gameType, runScore, target) {
+  const pool   = DOCTRINE_BY_TASK[gameType] || DOCTRINE_BY_TASK.custom;
+  const unused = pool.filter(p => !doctrine.find(d => d.p === p));
+  const count  = Math.min(unused.length, runNum <= 2 ? 3 : runNum <= 4 ? 2 : 1);
+  if (!count) return 0;
+  unused.slice(0, count).forEach(p => {
+    const a = agents[Math.floor(Math.random() * agents.length)];
+    doctrine.push({ p, by: a.name, color: a.color, run: runNum, conf: Math.min(0.92, 0.35 + runNum * 0.11) });
+  });
+  renderDoctrine();
+  return count;
+}
+
+function renderDoctrine() {
+  const feed = document.getElementById('doc-feed');
+  document.getElementById('doc-count').textContent = doctrine.length;
+  if (!doctrine.length) return;
+  feed.innerHTML = '';
+  doctrine.slice().reverse().forEach(e => {
+    const conf = Math.round(e.conf * 5);
+    feed.insertAdjacentHTML('beforeend', `<div class="doc-card">
+      <div class="doc-text">${esc(e.p)}</div>
+      <div class="doc-meta">
+        <span class="doc-author" style="color:${e.color}">${esc(e.by)}</span>
+        <span>· Run ${e.run}</span>
+      </div>
+      <div class="conf-row">${Array.from({length:5},(_,i)=>`<div class="pip${i<conf?' on':''}"></div>`).join('')}</div>
+    </div>`);
+  });
+}
+
+// ── Conversation helpers ───────────────────────────────────────────────────
+function convAdd(html) {
+  const f  = document.getElementById('conv');
+  const ph = document.getElementById('conv-ph');
+  if (ph) ph.remove();
+  f.insertAdjacentHTML('beforeend', html);
+  f.scrollTop = f.scrollHeight;
+}
+function sysMsg(t) { convAdd(`<div class="sys-msg">${t}</div>`); }
+function agentMsg(a, html) {
+  convAdd(`<div class="msg">
+    <div class="av" style="background:${a.color}22;color:${a.color}">${a.name[0].toUpperCase()}</div>
+    <div class="mb">
+      <div class="mn" style="color:${a.color}">${esc(a.name)} <span class="mr">${esc(a.role)}</span></div>
+      <div class="mt">${html}</div>
+    </div>
+  </div>`);
+  document.getElementById('conv').scrollTop = 9999;
+}
+function showThinking(a) {
+  convAdd(`<div class="thinking-wrap" id="th-${a.id}">
+    <div class="av" style="background:${a.color}22;color:${a.color}">${a.name[0].toUpperCase()}</div>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>`);
+  document.getElementById('conv').scrollTop = 9999;
+}
+function hideThinking(a) { const e = document.getElementById(`th-${a.id}`); if (e) e.remove(); }
+
+// ── Main run loop ─────────────────────────────────────────────────────────
+async function nextRun() {
+  if (busy) return;
+  busy = true;
+  runNum++;
+
+  const btn   = document.getElementById('run-btn');
+  const task  = TASKS[selectedTaskType];
+  const target = selectedTaskType === 'stratum' ? 60 : selectedTaskType === 'cartographers' ? 30 : null;
+
+  btn.disabled = true;
+  document.getElementById('result-banner').className = 'result-banner';
+  document.getElementById('run-info').textContent = `Run ${runNum} in progress…`;
+  document.getElementById('conv').innerHTML = '';
+
+  // Simulated game state
+  const runState = selectedTaskType === 'stratum' ? {
+    columns: [0,1,2,3,4].map(id => ({ id, depth: 0, collapsed: false, rumble: false })),
+    score: 0, turn: 0,
+  } : null;
+
+  const TURNS = selectedTaskType === 'stratum' ? 10
+               : selectedTaskType === 'cartographers' ? 8 : 4;
+
+  sysMsg(`— Run ${runNum} · ${task.label} · ${agents.length} agent${agents.length>1?'s':''} —`);
+  await sleep(300);
+
+  let totalScore = 0;
+
+  for (let turn = 1; turn <= TURNS; turn++) {
+    if (selectedTaskType === 'custom') {
+      sysMsg(`— Round ${turn} of ${TURNS} —`);
+    } else {
+      sysMsg(`— Turn ${turn} of ${TURNS} —`);
+    }
+    await sleep(200);
+
+    const turnData = selectedTaskType === 'stratum'      ? makeStratumTurn(runState)
+                   : selectedTaskType === 'cartographers' ? makeCartographersTurn(turn)
+                   : makeCustomTurn();
+
+    for (const agent of agents) {
+      showThinking(agent);
+      await sleep(600 + Math.random()*500);
+      hideThinking(agent);
+      agentMsg(agent, agentSay(agent, selectedTaskType, turnData, totalScore));
+      await sleep(260);
+    }
+
+    // Simulate outcome
+    if (selectedTaskType === 'stratum' && runState) {
+      const col = runState.columns.find(c => c.id === turnData.best_col && !c.collapsed);
+      if (col) {
+        const collapse = Math.random() < (col.depth * 0.12);
+        if (collapse) {
+          col.collapsed = true;
+          sysMsg(`Column ${col.id} COLLAPSES`);
+        } else {
+          col.depth += turnData.intensity;
+          col.rumble = col.depth >= 4;
+        }
+      }
+      runState.turn = turn;
+      runState.score = runState.columns.filter(c=>!c.collapsed).reduce((s,c)=>s+c.depth**2,0);
+      totalScore = runState.score;
+      updateStratumDisplay(runState);
+      document.getElementById('run-round-num') && (document.getElementById('run-round-num').textContent = turn);
+    } else if (selectedTaskType === 'cartographers') {
+      totalScore += Math.floor(Math.random()*5) + 2;
+      document.getElementById('ca-score').textContent = totalScore;
+      const SEASONS = ['Spring','Summer','Autumn','Winter'];
+      document.getElementById('ca-season').textContent = SEASONS[Math.floor((turn-1)/2)] || 'Winter';
+      document.getElementById('ca-last').textContent = `Placed ${turnData.terrain} at (${turnData.row},${turnData.col})`;
+    } else {
+      totalScore += Math.floor(Math.random()*15)+5;
+      const el = document.getElementById('run-round-num');
+      if (el) el.textContent = turn;
+    }
+
+    await sleep(400);
+  }
+
+  // Result
+  const isScored = target !== null;
+  const outcome  = isScored ? (totalScore >= target ? 'win' : 'loss') : 'draw';
+  const lbl      = isScored
+    ? (totalScore >= target ? `BEAT TARGET ✓ (${totalScore} pts)` : `MISSED TARGET ✗ (${totalScore} pts)`)
+    : `Run complete (${totalScore} pts)`;
+  const cls = outcome;
+
+  if (outcome === 'win')  record.w++;
+  if (outcome === 'loss') record.l++;
+  if (outcome === 'draw') record.d++;
+  document.getElementById('rw').textContent = record.w+'W';
+  document.getElementById('rl').textContent = record.l+'L';
+  document.getElementById('rd').textContent = record.d+'D';
+
+  const banner = document.getElementById('result-banner');
+  banner.textContent = lbl;
+  banner.className   = 'result-banner ' + cls;
+  sysMsg(`— ${lbl} —`);
+  await sleep(500);
+
+  sysMsg('— Debrief —');
+  for (const a of agents) {
+    await sleep(280);
+    showThinking(a);
+    await sleep(550 + Math.random()*350);
+    hideThinking(a);
+    agentMsg(a, agentDebrief(a, outcome, totalScore));
+  }
+
+  await sleep(600);
+  const added = addDoctrineEntries(selectedTaskType, totalScore, target);
+  if (added) sysMsg(`— +${added} doctrine entr${added>1?'ies':'y'} saved —`);
+
+  busy = false;
+  btn.textContent = `Start Run ${runNum + 1}`;
+  btn.disabled    = false;
+  document.getElementById('run-info').textContent = `Run ${runNum} complete`;
+}
+</script>
+</body>
+</html>

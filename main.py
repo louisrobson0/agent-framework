@@ -1,69 +1,95 @@
 from agents import Agent
 from organization import Organization
 from game import FifteenGame
+from stratum import StratumGame
+from cartographers import CartographersGame
 
 ANALYST = Agent(
-    name="Ana",
+    name="Alice",
     role="Strategy Analyst",
     personality=(
-        "Methodical and pattern-focused. You look for mathematical structure, "
-        "map out what numbers the opponent might need, and like to think "
-        "several moves ahead before committing."
+        "Methodical and pattern-focused. You enumerate options, estimate probabilities, "
+        "and minimise variance. You want full information before committing to a move."
     ),
 )
 
-INTUITION = Agent(
-    name="Kai",
-    role="Intuitive Player",
+BOLD = Agent(
+    name="Bob",
+    role="Bold Player",
     personality=(
-        "Fast and instinctive. You trust momentum and gut feel. You notice "
-        "which numbers feel powerful and like to disrupt the opponent's "
-        "plans before they materialize."
+        "Fast and aggressive. You maximise expected value and accept tail risk. "
+        "You'd rather push hard and occasionally fail than play timid and leave points on the table."
     ),
 )
 
-CRITIC = Agent(
-    name="Max",
+SKEPTIC = Agent(
+    name="Carol",
     role="Devil's Advocate",
     personality=(
-        "Skeptical of whatever the team just proposed. You challenge "
-        "assumptions, point out what could go wrong, and push everyone "
-        "to think one move further before deciding."
+        "Skeptical of whatever the team just proposed. You challenge assumptions, "
+        "point out what could go wrong, and push everyone to think one step further before deciding."
     ),
 )
 
-team = Organization(
-    name="The Strategists",
-    agents=[ANALYST, INTUITION, CRITIC],
-    goal=(
-        "Master the game of Fifteen. Through repeated play and reflection, "
-        "develop a reliable winning strategy and encode it as doctrine."
-    ),
-)
+GAMES = {
+    "1": ("Fifteen (vs bot)",     "fifteen"),
+    "2": ("Stratum (excavation)", "stratum"),
+    "3": ("Cartographers (map)",  "cartographers"),
+}
+
+GOALS = {
+    "fifteen":      "Master the game of Fifteen. Develop a reliable winning strategy.",
+    "stratum":      "Master Stratum. Learn when to dig aggressively versus play safe. Beat 60 points.",
+    "cartographers":"Master Cartographers. Learn how to place terrain efficiently for maximum score. Beat 30 points.",
+}
 
 if __name__ == "__main__":
+    print("\nChoose a game:")
+    for k, (label, _) in GAMES.items():
+        print(f"  {k}. {label}")
+    choice = input("Enter 1, 2, or 3: ").strip()
+    _, game_key = GAMES.get(choice, ("", "stratum"))
+
+    team = Organization(
+        name="The Strategists",
+        agents=[ANALYST, BOLD, SKEPTIC],
+        goal=GOALS[game_key],
+    )
+
     try:
         games = int(input("How many games to play? "))
     except ValueError:
         games = 3
 
-    results = []
+    scores = []
 
     for i in range(1, games + 1):
         print(f"\n{'*'*50}")
-        print(f"  Game {i} of {games}")
+        print(f"  Game {i} of {games}  [{game_key.upper()}]")
         if team.doctrine.entries:
             print(f"  Doctrine so far: {len(team.doctrine.entries)} entries")
         print(f"{'*'*50}")
 
-        outcome = team.play_game(FifteenGame())
-        results.append(outcome)
-
-    wins = results.count("org_wins")
-    losses = results.count("bot_wins")
-    draws = results.count("draw")
+        if game_key == "fifteen":
+            outcome = team.play_game(FifteenGame())
+            scores.append(outcome)
+        elif game_key == "stratum":
+            score = team.play_solo_game(StratumGame())
+            scores.append(score)
+        elif game_key == "cartographers":
+            score = team.play_solo_game(CartographersGame())
+            scores.append(score)
 
     print(f"\n{'='*50}")
-    print(f"  Final record: {wins}W / {losses}L / {draws}D")
+    if game_key == "fifteen":
+        wins   = scores.count("org_wins")
+        losses = scores.count("bot_wins")
+        draws  = scores.count("draw")
+        print(f"  Final record: {wins}W / {losses}L / {draws}D")
+    else:
+        target = 60 if game_key == "stratum" else 30
+        beats  = sum(1 for s in scores if s >= target)
+        print(f"  Scores: {scores}")
+        print(f"  Beat target ({target}): {beats}/{games} games")
     print(f"  Doctrine accumulated: {len(team.doctrine.entries)} entries")
     print(f"{'='*50}")

@@ -118,6 +118,73 @@ class Organization:
 
         return outcome
 
+    def play_solo_game(self, game, verbose: bool = True) -> int:
+        """Play one session of a solo game (Stratum or Cartographers). Returns final score."""
+        doctrine_context = self.doctrine.to_context()
+        full_transcript: list[str] = []
+
+        print(f"\n{game.RULES}\n")
+
+        # Cartographers needs the first card drawn before the loop
+        if hasattr(game, "draw_card"):
+            game.draw_card()
+
+        while game.status() == "ongoing":
+            state = game.display()
+            print(f"\n{state}")
+
+            history = "\n".join(full_transcript) if full_transcript else "(game just started)"
+            prompt = (
+                f"{game.RULES}\n\n"
+                f"Current state:\n{state}\n\n"
+                f"Discussion so far:\n{history}\n\n"
+                f"Discuss briefly, then end your message with your proposed action in the exact format "
+                f"described in the rules (e.g. ACTION: DIG 2 3  or  PLACE: row col orientation)."
+            )
+
+            discussion: list[str] = []
+            for agent in self.agents:
+                context = prompt if not discussion else (prompt + "\n\n" + "\n".join(discussion))
+                response = agent.run(context, doctrine_context, self.goal)
+                line = f"{agent.name}: {response}"
+                discussion.append(line)
+                full_transcript.append(line)
+                if verbose:
+                    print(f"\n[{agent.name}] {response}")
+
+            combined = " ".join(discussion)
+            action_tuple = game.parse_action(combined)
+            result = game.execute(action_tuple)
+            events_str = " | ".join(result.get("events", []))
+            print(f"\n>>> {events_str}")
+            full_transcript.append(f"[Game] {events_str}")
+
+            # Cartographers: draw next card if season not over
+            if hasattr(game, "draw_card") and game.status() == "ongoing" and game.current_card is None:
+                game.draw_card()
+
+        score = game.total_score() if hasattr(game, "total_score") else game.score()
+        print(f"\n{'='*40}\nFinal score: {score}\n{'='*40}")
+
+        debrief = (
+            f"Game over — final score: {score}.\n\n"
+            f"Discuss: what worked, what failed, what should we do differently next game?"
+        )
+        full_transcript.append(debrief)
+        for agent in self.agents:
+            response = agent.run("\n".join(full_transcript), doctrine_context, self.goal)
+            line = f"{agent.name}: {response}"
+            full_transcript.append(line)
+            if verbose:
+                print(f"\n[{agent.name} debrief] {response}")
+
+        new_entries = self._synthesize("\n".join(full_transcript))
+        if new_entries:
+            self.doctrine.add(new_entries)
+            print(f"\n+{len(new_entries)} doctrine entries saved.")
+
+        return score
+
     def _parse_move(self, text: str, available: list[int]) -> int:
         match = re.search(r"PICK:\s*(\d+)", text, re.IGNORECASE)
         if match:
